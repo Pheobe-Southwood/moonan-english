@@ -25,9 +25,9 @@ signing.properties
 secrets.properties
 
 # User data, exports, and temporary media
-data/
-exports/
-backups/
+/data/
+/exports/
+/backups/
 *.apk
 *.aab
 *.zip
@@ -44,4 +44,3 @@ ref/
 # Local OS files
 .DS_Store
 Thumbs.db
-
