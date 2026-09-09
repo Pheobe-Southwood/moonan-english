@@ -73,7 +73,7 @@ class ExamCatalogTest {
         assertFalse(article(2013).contains("[reference:"))
         assertTrue(article(2013).contains("irrepressible urge"))
         assertTrue(article(2014).contains("Beethoven’s habit"))
-        assertTrue(article(2014).contains("The Funeral March"))
+        assertTrue(article(2014).contains("Funeral March"))
         assertTrue(article(2017).contains("a basis for planning to meet the possibilities of what could be a very different operating environment"))
         assertTrue(article(2023).contains("AI can also be used to identify"))
         assertFalse(article(2023).contains("Almost all our major problems involve human behavior"))

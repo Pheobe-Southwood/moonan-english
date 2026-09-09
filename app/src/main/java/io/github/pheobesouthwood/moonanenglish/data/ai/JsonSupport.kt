@@ -119,8 +119,7 @@ object AiJsonParser {
             is JSONObject -> {
                 value.optStringOrNull("text")?.let { return it }
                 value.optStringOrNull("output_text")?.let { return it }
-                value.optObjectOrNull("content")?.let { return textIn(it) }
-                value.optArrayOrNull("content")?.let { return textIn(it) }
+                textIn(value.opt("content")).takeIf { it.isNotBlank() }?.let { return it }
                 value.optArrayOrNull("parts")?.let { return textIn(it) }
                 value.optObjectOrNull("message")?.let { return textIn(it) }
             }
