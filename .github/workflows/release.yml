@@ -1,0 +1,138 @@
+name: Signed Android Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign, and publish APK
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Validate release secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_STORE_PASSWORD ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required Actions secret: $name" >&2
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Decode signing keystore in runner temp directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/moonan-english-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$key_path"
+          chmod 600 "$key_path"
+          echo "ANDROID_KEYSTORE_PATH=$key_path" >> "$GITHUB_ENV"
+          echo "RELEASE_KEYSTORE_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Reject local reference material and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$(git ls-files | grep -E '(^|/)(ref/|.*\.(zip|jks|keystore|p12|pem|apk))$' || true)"
+          if [[ -n "$forbidden" ]]; then
+            echo "Forbidden local material is tracked:"
+            echo "$forbidden"
+            exit 1
+          fi
+
+      - name: Run tests, lint, and signed release build
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:test :app:lintDebug :app:assembleRelease
+
+      - name: Verify release signature
+        id: verify-signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find "$GITHUB_WORKSPACE" -type f -path '*/build/outputs/apk/release/*.apk' -name '*.apk' | sort)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "Expected exactly one release APK, found ${#apks[@]}" >&2
+            printf '%s\n' "${apks[@]}" >&2
+            exit 1
+          fi
+
+          apk="${apks[0]}"
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          apksigner="$build_tools/apksigner"
+          [[ -x "$apksigner" ]] || { echo "apksigner not found" >&2; exit 1; }
+          "$apksigner" verify --verbose "$apk"
+          certs="$("$apksigner" verify --print-certs "$apk" 2>&1)"
+          if grep -qi 'Android Debug' <<< "$certs"; then
+            echo "Release APK is signed with the Android debug certificate" >&2
+            exit 1
+          fi
+          echo "$certs"
+
+          release_dir="$RUNNER_TEMP/release-assets"
+          mkdir -p "$release_dir"
+          artifact="moonan-english-${GITHUB_REF_NAME}.apk"
+          cp "$apk" "$release_dir/$artifact"
+          sha256sum "$release_dir/$artifact" > "$release_dir/$artifact.sha256"
+          echo "asset_dir=$release_dir" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release assets as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonan-english-${{ github.ref_name }}
+          path: ${{ steps.verify-signature.outputs.asset_dir }}/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 研英批改 ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.verify-signature.outputs.asset_dir }}/${{ steps.verify-signature.outputs.artifact }}
+            ${{ steps.verify-signature.outputs.asset_dir }}/${{ steps.verify-signature.outputs.artifact }}.sha256
+
+      - name: Remove temporary signing material
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [[ -n "${RELEASE_KEYSTORE_PATH:-}" ]]; then
+            rm -f -- "$RELEASE_KEYSTORE_PATH"
+          fi

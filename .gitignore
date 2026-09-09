@@ -1,0 +1,47 @@
+# Gradle / Android build output
+.gradle/
+build/
+**/build/
+local.properties
+*.iml
+
+# IDE metadata
+.idea/
+.fleet/
+.vscode/
+
+# Signing material and local credentials
+*.jks
+*.keystore
+*.p12
+*.pem
+*.der
+*.cer
+*.key
+keystore.properties
+signing.properties
+.env
+.env.*
+secrets.properties
+
+# User data, exports, and temporary media
+data/
+exports/
+backups/
+*.apk
+*.aab
+*.zip
+*.tar
+*.tar.gz
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Original reference material is never a repository input
+ref/
+
+# Local OS files
+.DS_Store
+Thumbs.db
+
