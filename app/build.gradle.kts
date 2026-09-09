@@ -1,25 +1,21 @@
-import java.util.Base64
-
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
     namespace = "io.github.pheobesouthwood.moonanenglish"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.pheobesouthwood.moonanenglish"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
-        resourceConfigurations += listOf("zh")
     }
 
     val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
